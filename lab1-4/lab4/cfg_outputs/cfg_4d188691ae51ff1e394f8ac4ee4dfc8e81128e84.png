@@ -1,0 +1,1094 @@
+digraph "cluster2base.py" {
+	graph [compound=True fontname="DejaVu Sans Mono" label="base.py" pack=False rankdir=TB ranksep=0.02]
+	node [fontname="DejaVu Sans Mono"]
+	edge [fontname="DejaVu Sans Mono"]
+	1 [label="from __future__ import absolute_import\limport requests\limport sys\limport json\limport six\limport logging\lfrom collections import OrderedDict\lfrom geocoder.distance import Distance\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+	2 [label="from collections.abc import MutableSequence\lfrom urllib.parse import urlparse\l" fillcolor=orange shape=Mdiamond style="filled,solid"]
+	4 [label="from urlparse import urlparse\lclass MutableSequence(object):\l\l    def index(self, v, **kwargs):\l        return self._list.index(v, **kwargs)\l\l    def count(self, v):\l        return self._list.count(v)\l\l    def pop(self, i=-1):\l        return self._list.pop(i)\l\l    def remove(self, v):\l        self._list.remove(v)\l\l    def __iter__(self):\l        return iter(self._list)\l\l    def __contains__(self, v):\l        return self._list.__contains__(v)\l\l    def __eq__(self, other):\l        return self._list == other\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+	3 [label="is_python2 = sys.version_info < (3, 0)\lLOGGER = logging.getLogger(__name__)\lclass OneResult(object):\l    \"\"\" Container for one (...\"\"\"\l    _TO_EXCLUDE = ['parse', 'json', 'url', 'fieldnames', 'help', 'debug',\l        'short_name', 'api', 'content', 'params', 'street_number',\l        'api_key', 'key', 'id', 'x', 'y', 'latlng', 'headers', 'timeout',\l        'wkt', 'locality', 'province', 'rate_limited_get', 'osm', 'route',\l        'schema', 'properties', 'geojson', 'tree', 'error', 'proxies',\l        'road', 'xy', 'northeast', 'northwest', 'southeast', 'southwest',\l        'road_long', 'city_long', 'state_long', 'country_long',\l        'postal_town_long', 'province_long', 'road_long', 'street_long',\l        'interpolated', 'method', 'geometry', 'session']\l\l    def __init__(self, json_content):\l        self.raw = json_content\l        self.northeast = []\l        self.northwest = []\l        self.southeast = []\l        self.southwest = []\l        self.fieldnames = []\l        self.json = {}\l        self._parse_json_with_fieldnames()\l\l    @property\l    def lat(self):\l        return ''\l\l    @property\l    def lng(self):\l        return ''\l\l    @property\l    def accuracy(self):\l        return ''\l\l    @property\l    def quality(self):\l        return ''\l\l    @property\l    def bbox(self):\l        return {}\l\l    @property\l    def address(self):\l        return ''\l\l    @property\l    def housenumber(self):\l        return ''\l\l    @property\l    def street(self):\l        return ''\l\l    @property\l    def city(self):\l        return ''\l\l    @property\l    def state(self):\l        return ''\l\l    @property\l    def country(self):\l        return ''\l\l    @property\l    def postal(self):\l        return ''\l\l    def __repr__(self):\l        \"\"\" Display [address] i...\"\"\"\l        if self.address:\l            return u'[{0}]'.format(six.text_type(self.address))\l        else:\l            return u'[{0},{1}]'.format(self.lat, self.lng)\l\l    def _parse_json_with_fieldnames(self):\l        \"\"\" Parse the raw JSON with all attributes/methods defined in the class, except for the\l            ones defined starting with '_' or flagged in cls._TO_EXCLUDE.\l\l            The final result is stored in self.json\l        \"\"\"\l        for key in dir(self):\l            if not key.startswith('_') and key not in self._TO_EXCLUDE:\l                self.fieldnames.append(key)\l                value = getattr(self, key)\l                if value:\l                    self.json[key] = value\l        self.json['ok'] = self.ok\l\l    @property\l    def ok(self):\l        return bool(self.lng and self.lat)\l\l    @property\l    def status(self):\l        if self.ok:\l            return 'OK'\l        if not self.address:\l            return 'ERROR - No results f...'\l        return 'ERROR - No Geometry'\l\l    def debug(self):\l        print('')\l        print('From provider')\l        print('-----------')\l        print(json.dumps(self.raw, indent=4))\l        print('')\l        print('Cleaned json')\l        print('-----------')\l        print(json.dumps(self.json, indent=4))\l        print('')\l        print('OSM Quality')\l        print('-----------')\l        count = 0\l        for key in self.osm:\l            if 'addr:' in key:\l                if self.json.get(key.replace('addr:', '')):\l                    print('- [x] {0}'.format(key))\l                    count += 1\l                else:\l                    print('- [ ] {0}'.format(key))\l        print('({0}/{1})'.format(count, len(self.osm) - 2))\l        print('')\l        print('Fieldnames')\l        print('----------')\l        count = 0\l        for fieldname in self.fieldnames:\l            if self.json.get(fieldname):\l                print('- [x] {0}'.format(fieldname))\l                count += 1\l            else:\l                print('- [ ] {0}'.format(fieldname))\l        print('({0}/{1})'.format(count, len(self.fieldnames)))\l\l    def _get_bbox(self, south, west, north, east):\l        if all([south, east, north, west]):\l            self.south = float(south)\l            self.west = float(west)\l            self.north = float(north)\l            self.east = float(east)\l            self.northeast = [self.north, self.east]\l            self.northwest = [self.north, self.west]\l            self.southwest = [self.south, self.west]\l            self.southeast = [self.south, self.east]\l            self.westsouth = [self.west, self.south]\l            self.eastnorth = [self.east, self.north]\l            return dict(northeast=self.northeast, southwest=self.southwest)\l        return {}\l\l    @property\l    def confidence(self):\l        if self.bbox:\l            distance = Distance(self.northeast, self.southwest, units='km')\l            for score, maximum in [(10, 0.25), (9, 0.5), (8, 1), (7, 5), (6,\l                7.5), (5, 10), (4, 15), (3, 20), (2, 25)]:\l                if distance < maximum:\l                    return score\l                if distance >= 25:\l                    return 1\l        return 0\l\l    @property\l    def geometry(self):\l        if self.ok:\l            return {'type': 'Point', 'coordinates': [self.x, self.y]}\l        return {}\l\l    @property\l    def osm(self):\l        osm = dict()\l        if self.ok:\l            osm['x'] = self.x\l            osm['y'] = self.y\l            if self.housenumber:\l                osm['addr:housenumber'] = self.housenumber\l            if self.road:\l                osm['addr:street'] = self.road\l            if self.city:\l                osm['addr:city'] = self.city\l            if self.state:\l                osm['addr:state'] = self.state\l            if self.country:\l                osm['addr:country'] = self.country\l            if self.postal:\l                osm['addr:postal'] = self.postal\l            if hasattr(self, 'population'):\l                if self.population:\l                    osm['population'] = self.population\l        return osm\l\l    @property\l    def geojson(self):\l        feature = {'type': 'Feature', 'properties': self.json}\l        if self.bbox:\l            feature['bbox'] = [self.west, self.south, self.east, self.north]\l            feature['properties']['bbox'] = feature['bbox']\l        if self.geometry:\l            feature['geometry'] = self.geometry\l        return feature\l\l    @property\l    def wkt(self):\l        if self.ok:\l            return 'POINT({x} {y})'.format(x=self.x, y=self.y)\l        return ''\l\l    @property\l    def xy(self):\l        if self.ok:\l            return [self.lng, self.lat]\l        return []\l\l    @property\l    def latlng(self):\l        if self.ok:\l            return [self.lat, self.lng]\l        return []\l\l    @property\l    def y(self):\l        return self.lat\l\l    @property\l    def x(self):\l        return self.lng\l\l    @property\l    def locality(self):\l        return self.city\l\l    @property\l    def province(self):\l        return self.state\l\l    @property\l    def street_number(self):\l        return self.housenumber\l\l    @property\l    def road(self):\l        return self.street\l\l    @property\l    def route(self):\l        return self.street\lclass MultipleResultsQuery(MutableSequence):\l    \"\"\" Will replace the Base class to support multiple results, with the following differences :\l\l        - split class into 2 parts :\l            - OneResult to actually store a (JSON) object from provider\l            - MultipleResultsQuery to manage the query\l\l        - class variables moved into instance\l        - remaining class variables are names with convention: _CAPITALS\l        - self.url derived from class var cls.URL, which must be a valid URL\l        - self.timeout has default value from class var cls.TIMEOUT\l    \"\"\"\l    _URL = None\l    _RESULT_CLASS = None\l    _KEY = None\l    _KEY_MANDATORY = True\l    _TIMEOUT = 5.0\l\l    @staticmethod\l    def _is_valid_url(url):\l        \"\"\" Helper function to validate that URLs are well formed, i.e that it contains a valid\l            protocol and a valid domain. It does not actually check if the URL exists\l        \"\"\"\l        try:\l            parsed = urlparse(url)\l            mandatory_parts = [parsed.scheme, parsed.netloc]\l            return all(mandatory_parts)\l        except:\l            return False\l\l    @classmethod\l    def _is_valid_result_class(cls):\l        return issubclass(cls._RESULT_CLASS, OneResult)\l\l    @classmethod\l    def _get_api_key(cls, key=None):\l        key = key or cls._KEY\l        if not key and cls._KEY_MANDATORY:\l            raise ValueError('Provide API Key')\l        return key\l\l    def __init__(self, location, **kwargs):\l        super(MultipleResultsQuery, self).__init__()\l        self._list = []\l        if not self._is_valid_url(self._URL):\l            raise ValueError('Subclass must define...',\l                self._URL)\l        self.url = self._URL\l        if not self._is_valid_result_class():\l            raise ValueError(\l                \"Subclass must define...'OneResult'. Got %s\",\l                self._RESULT_CLASS)\l        self.one_result = self._RESULT_CLASS\l        provider_key = self._get_api_key(kwargs.pop('key', ''))\l        self.location = location\l        self.encoding = kwargs.get('encoding', 'utf-8')\l        self.timeout = kwargs.get('timeout', self._TIMEOUT)\l        self.proxies = kwargs.get('proxies', '')\l        self.session = kwargs.get('session', requests.Session())\l        self.headers = kwargs.get('headers', self._build_headers(\l            provider_key, **kwargs))\l        self.params = OrderedDict(kwargs.get('params', self._build_params(\l            location, provider_key, **kwargs)))\l        self.status_code = None\l        self.response = None\l        self.error = False\l        self.current_result = None\l        self._before_initialize(location, **kwargs)\l        self._initialize()\l\l    def __getitem__(self, key):\l        return self._list[key]\l\l    def __setitem__(self, key, value):\l        self._list[key] = value\l\l    def __delitem__(self, key):\l        del self._list[key]\l\l    def __len__(self):\l        return len(self._list)\l\l    def insert(self, index, value):\l        self._list.insert(index, value)\l\l    def add(self, value):\l        self._list.append(value)\l\l    def __repr__(self):\l        base_repr = u'<[{0}] {1} - {2} {{0...'.format(self.status, self.\l            provider.title(), self.method.title())\l        if len(self) == 0:\l            return base_repr.format(u'[empty]')\l        elif len(self) == 1:\l            return base_repr.format(repr(self[0]))\l        else:\l            return base_repr.format(u'#%s results' % len(self))\l\l    def _build_headers(self, provider_key, **kwargs):\l        \"\"\"Will be overridden a...\"\"\"\l        return {}\l\l    def _build_params(self, location, provider_key, **kwargs):\l        \"\"\"Will be overridden a...\"\"\"\l        return {}\l\l    def _before_initialize(self, location, **kwargs):\l        \"\"\"Can be overridden to...\"\"\"\l        pass\l\l    def _initialize(self):\l        json_response = self._connect()\l        has_error = self._catch_errors(json_response\l            ) if json_response else True\l        if not has_error:\l            self._parse_results(json_response)\l\l    def _connect(self):\l        \"\"\" - Query self.url (validated cls._URL)\l            - Analyse reponse and set status, errors accordingly\l            - On success:\l\l                 returns the content of the response as a JSON object\l                 This object will be passed to self._parse_json_response\l        \"\"\"\l        self.status_code = 'Unknown'\l        try:\l            self.response = response = self.rate_limited_get(self.url,\l                params=self.params, headers=self.headers, timeout=self.\l                timeout, proxies=self.proxies)\l            self.status_code = response.status_code\l            response.raise_for_status()\l            json_response = response.json()\l            self.url = response.url\l            LOGGER.info('Requested %s', self.url)\l        except requests.exceptions.RequestException as err:\l            self.error = u'ERROR - {}'.format(str(err))\l            LOGGER.error('Status code %s from ...', self.status_code,\l                self.url, self.error)\l            return False\l        return json_response\l\l    def rate_limited_get(self, url, **kwargs):\l        \"\"\" By default, simply ...\"\"\"\l        return self.session.get(url, **kwargs)\l\l    def _adapt_results(self, json_response):\l        \"\"\" Allow children classes to format json_response into an array of objects\l            OVERRIDE TO FETCH the correct array of objects when necessary\l        \"\"\"\l        return json_response\l\l    def _parse_results(self, json_response):\l        \"\"\" Creates instances of self.one_result (validated cls._RESULT_CLASS)\l            from JSON results retrieved by self._connect\l\l            params: array of objects (dictionnaries)\l        \"\"\"\l        for json_dict in self._adapt_results(json_response):\l            self.add(self.one_result(json_dict))\l        self.current_result = len(self) > 0 and self[0]\l\l    def _catch_errors(self, json_response):\l        \"\"\" Checks the JSON ret...\"\"\"\l        return self.error\l\l    @property\l    def ok(self):\l        return len(self) > 0\l\l    @property\l    def status(self):\l        if self.ok:\l            return 'OK'\l        elif self.error:\l            return self.error\l        elif len(self) == 0:\l            return 'ERROR - No results f...'\l        else:\l            return 'ERROR - Unhandled Ex...'\l\l    @property\l    def geojson(self):\l        geojson_results = [result.geojson for result in self]\l        features = {'type': 'FeatureCollection', 'features': geojson_results}\l        return features\l\l    def debug(self):\l        print('===')\l        print(repr(self))\l        print('===')\l        print('')\l        print('#res: {}'.format(len(self)))\l        print('code: {}'.format(self.status_code))\l        print('url:  {}'.format(self.url))\l        if self.ok:\l            for index, result in enumerate(self):\l                print('')\l                print('Details for result #...'.format(index + 1))\l                print('---')\l                result.debug()\l        else:\l            print(self.status)\l\l    def set_default_result(self, index):\l        \"\"\" change the result used to delegate the calls to. The provided index should be in the\l            range of results, otherwise it will raise an exception\l        \"\"\"\l        self.current_result = self[index]\l\l    def __getattr__(self, name):\l        \"\"\" Called when an attribute lookup has not found the attribute in the usual places (i.e.\l            it is not an instance attribute nor is it found in the class tree for self). name is\l            the attribute name. This method should return the (computed) attribute value or raise\l            an AttributeError exception.\l\l            Note that if the attribute is found through the normal mechanism, __getattr__() is not called.\l        \"\"\"\l        if not self.ok:\l            raise ValueError(self.status)\l        if self.current_result is None:\l            raise AttributeError(\l                '%s not found on %s, ...'.format(\l                name, self.__class__.__name__))\l        return getattr(self.current_result, name)\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+	3 -> 36 [label=calls style=dashed]
+	subgraph cluster_3 {
+		graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+		node [fontname="DejaVu Sans Mono"]
+		edge [fontname="DejaVu Sans Mono"]
+		36 [label="logging.getLogger" color="#E552FF" shape=tab style=filled]
+	}
+	4 -> 3 [label="" color=black]
+	2 -> 3 [label="" color=black]
+	1 -> 2 [label="" color=black]
+	subgraph cluster0MutableSequence {
+		graph [compound=True fontname="DejaVu Sans Mono" label=MutableSequence pack=False rankdir=TB ranksep=0.02]
+		node [fontname="DejaVu Sans Mono"]
+		edge [fontname="DejaVu Sans Mono"]
+		6 [label="def index(self, v, **kwargs):...\ldef count(self, v):...\ldef pop(self, i=-1):...\ldef remove(self, v):...\ldef __iter__(self):...\ldef __contains__(self, v):...\ldef __eq__(self, other):...\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+		subgraph cluster0index {
+			graph [compound=True fontname="DejaVu Sans Mono" label=index pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			8 [label="return self._list.index(v, **kwargs)\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster0count {
+			graph [compound=True fontname="DejaVu Sans Mono" label=count pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			12 [label="return self._list.count(v)\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster0pop {
+			graph [compound=True fontname="DejaVu Sans Mono" label=pop pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			16 [label="return self._list.pop(i)\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster0remove {
+			graph [compound=True fontname="DejaVu Sans Mono" label=remove pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			20 [label="self._list.remove(v)\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			20 -> 21 [label=calls style=dashed]
+			subgraph cluster_20 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				21 [label="self._list.remove" color="#E552FF" shape=tab style=filled]
+			}
+		}
+		subgraph cluster0__iter__ {
+			graph [compound=True fontname="DejaVu Sans Mono" label=__iter__ pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			24 [label="return iter(self._list)\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster0__contains__ {
+			graph [compound=True fontname="DejaVu Sans Mono" label=__contains__ pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			28 [label="return self._list.__contains__(v)\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster0__eq__ {
+			graph [compound=True fontname="DejaVu Sans Mono" label=__eq__ pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			32 [label="return self._list == other\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+	}
+	subgraph cluster0OneResult {
+		graph [compound=True fontname="DejaVu Sans Mono" label=OneResult pack=False rankdir=TB ranksep=0.02]
+		node [fontname="DejaVu Sans Mono"]
+		edge [fontname="DejaVu Sans Mono"]
+		38 [label="\"\"\" Container for one (...\"\"\"\l_TO_EXCLUDE = ['parse', 'json', 'url', 'fieldnames', 'help', 'debug',\l    'short_name', 'api', 'content', 'params', 'street_number', 'api_key',\l    'key', 'id', 'x', 'y', 'latlng', 'headers', 'timeout', 'wkt',\l    'locality', 'province', 'rate_limited_get', 'osm', 'route', 'schema',\l    'properties', 'geojson', 'tree', 'error', 'proxies', 'road', 'xy',\l    'northeast', 'northwest', 'southeast', 'southwest', 'road_long',\l    'city_long', 'state_long', 'country_long', 'postal_town_long',\l    'province_long', 'road_long', 'street_long', 'interpolated', 'method',\l    'geometry', 'session']\ldef __init__(self, json_content):...\l@property...\l@property...\l@property...\l@property...\l@property...\l@property...\l@property...\l@property...\l@property...\l@property...\l@property...\l@property...\ldef __repr__(self):...\ldef _parse_json_with_fieldnames(self):...\l@property...\l@property...\ldef debug(self):...\ldef _get_bbox(self, south, west, north, east):...\l@property...\l@property...\l@property...\l@property...\l@property...\l@property...\l@property...\l@property...\l@property...\l@property...\l@property...\l@property...\l@property...\l@property...\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+		subgraph cluster0__init__ {
+			graph [compound=True fontname="DejaVu Sans Mono" label=__init__ pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			40 [label="self.raw = json_content\lself.northeast = []\lself.northwest = []\lself.southeast = []\lself.southwest = []\lself.fieldnames = []\lself.json = {}\lself._parse_json_with_fieldnames()\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			40 -> 41 [label=calls style=dashed]
+			subgraph cluster_40 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				41 [label="self._parse_json_with_fieldnames" color="#E552FF" shape=tab style=filled]
+			}
+		}
+		subgraph cluster0lat {
+			graph [compound=True fontname="DejaVu Sans Mono" label=lat pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			44 [label="return ''\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster0lng {
+			graph [compound=True fontname="DejaVu Sans Mono" label=lng pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			48 [label="return ''\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster0accuracy {
+			graph [compound=True fontname="DejaVu Sans Mono" label=accuracy pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			52 [label="return ''\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster0quality {
+			graph [compound=True fontname="DejaVu Sans Mono" label=quality pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			56 [label="return ''\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster0bbox {
+			graph [compound=True fontname="DejaVu Sans Mono" label=bbox pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			60 [label="return {}\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster0address {
+			graph [compound=True fontname="DejaVu Sans Mono" label=address pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			64 [label="return ''\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster0housenumber {
+			graph [compound=True fontname="DejaVu Sans Mono" label=housenumber pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			68 [label="return ''\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster0street {
+			graph [compound=True fontname="DejaVu Sans Mono" label=street pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			72 [label="return ''\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster0city {
+			graph [compound=True fontname="DejaVu Sans Mono" label=city pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			76 [label="return ''\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster0state {
+			graph [compound=True fontname="DejaVu Sans Mono" label=state pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			80 [label="return ''\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster0country {
+			graph [compound=True fontname="DejaVu Sans Mono" label=country pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			84 [label="return ''\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster0postal {
+			graph [compound=True fontname="DejaVu Sans Mono" label=postal pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			88 [label="return ''\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster2__repr__ {
+			graph [compound=True fontname="DejaVu Sans Mono" label=__repr__ pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			92 [label="\"\"\" Display [address] i...\"\"\"\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			93 [label="if self.address:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			94 [label="return u'[{0}]'.format(six.text_type(self.address))\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			93 -> 94 [label="self.address" color=green]
+			96 [label="return u'[{0},{1}]'.format(self.lat, self.lng)\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			93 -> 96 [label="(not self.address)" color=red]
+			92 -> 93 [label="" color=black]
+		}
+		subgraph cluster0_parse_json_with_fieldnames {
+			graph [compound=True fontname="DejaVu Sans Mono" label=_parse_json_with_fieldnames pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			101 [label="\"\"\" Parse the raw JSON with all attributes/methods defined in the class, except for the\l            ones defined starting with '_' or flagged in cls._TO_EXCLUDE.\l\l            The final result is stored in self.json\l        \"\"\"\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			102 [label="for key in dir(self):\l" fillcolor="#FFBE52" shape=hexagon style="filled,solid"]
+			102 -> 103 [label=calls style=dashed]
+			subgraph cluster_102 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				103 [label=dir color="#E552FF" shape=tab style=filled]
+			}
+			104 [label="if not key.startswith('_') and key not in self._TO_EXCLUDE:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			106 [label="self.fieldnames.append(key)\lvalue = getattr(self, key)\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			106 -> 108 [label=calls style=dashed]
+			106 -> 109 [label=calls style=dashed]
+			subgraph cluster_106 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				108 [label="self.fieldnames.append" color="#E552FF" shape=tab style=filled]
+				109 [label=getattr color="#E552FF" shape=tab style=filled]
+			}
+			110 [label="if value:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			111 [label="self.json[key] = value\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			111 -> 102 [label="" color=black]
+			110 -> 111 [label=value color=green]
+			110 -> 102 [label="(not value)" color=red]
+			106 -> 110 [label="" color=black]
+			104 -> 106 [label="not key.startswith('_') and key not in self._TO_EXCLUDE" color=green]
+			104 -> 102 [label="(not (not key.startswith('_') and key not in self._TO_EXCLUDE))" color=red]
+			102 -> 104 [label="dir(self)" color=green]
+			105 [label="self.json['ok'] = self.ok\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			102 -> 105 [label="" color=green]
+			101 -> 102 [label="" color=black]
+		}
+		subgraph cluster2ok {
+			graph [compound=True fontname="DejaVu Sans Mono" label=ok pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			115 [label="return bool(self.lng and self.lat)\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster2status {
+			graph [compound=True fontname="DejaVu Sans Mono" label=status pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			119 [label="if self.ok:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			120 [label="return 'OK'\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			119 -> 120 [label="self.ok" color=green]
+			121 [label="if not self.address:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			123 [label="return 'ERROR - No results f...'\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			121 -> 123 [label="not self.address" color=green]
+			124 [label="return 'ERROR - No Geometry'\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			121 -> 124 [label="(not not self.address)" color=red]
+			119 -> 121 [label="(not self.ok)" color=red]
+		}
+		subgraph cluster2debug {
+			graph [compound=True fontname="DejaVu Sans Mono" label=debug pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			129 [label="print('')\lprint('From provider')\lprint('-----------')\lprint(json.dumps(self.raw, indent=4))\lprint('')\lprint('Cleaned json')\lprint('-----------')\lprint(json.dumps(self.json, indent=4))\lprint('')\lprint('OSM Quality')\lprint('-----------')\lcount = 0\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			129 -> 130 [label=calls style=dashed]
+			129 -> 131 [label=calls style=dashed]
+			129 -> 132 [label=calls style=dashed]
+			129 -> 133 [label=calls style=dashed]
+			129 -> 135 [label=calls style=dashed]
+			129 -> 136 [label=calls style=dashed]
+			129 -> 137 [label=calls style=dashed]
+			129 -> 138 [label=calls style=dashed]
+			129 -> 140 [label=calls style=dashed]
+			129 -> 141 [label=calls style=dashed]
+			129 -> 142 [label=calls style=dashed]
+			subgraph cluster_129 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				130 [label=print color="#E552FF" shape=tab style=filled]
+				131 [label=print color="#E552FF" shape=tab style=filled]
+				132 [label=print color="#E552FF" shape=tab style=filled]
+				133 [label=print color="#E552FF" shape=tab style=filled]
+				134 [label="json.dumps" color="#E552FF" shape=tab style=filled]
+				133 -> 134 [color=black]
+				135 [label=print color="#E552FF" shape=tab style=filled]
+				136 [label=print color="#E552FF" shape=tab style=filled]
+				137 [label=print color="#E552FF" shape=tab style=filled]
+				138 [label=print color="#E552FF" shape=tab style=filled]
+				139 [label="json.dumps" color="#E552FF" shape=tab style=filled]
+				138 -> 139 [color=black]
+				140 [label=print color="#E552FF" shape=tab style=filled]
+				141 [label=print color="#E552FF" shape=tab style=filled]
+				142 [label=print color="#E552FF" shape=tab style=filled]
+			}
+			143 [label="for key in self.osm:\l" fillcolor="#FFBE52" shape=hexagon style="filled,solid"]
+			144 [label="if 'addr:' in key:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			146 [label="if self.json.get(key.replace('addr:', '')):\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			146 -> 148 [label=calls style=dashed]
+			subgraph cluster_146 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				148 [label="self.json.get" color="#E552FF" shape=tab style=filled]
+				149 [label="key.replace" color="#E552FF" shape=tab style=filled]
+				148 -> 149 [color=black]
+			}
+			150 [label="print('- [x] {0}'.format(key))\lcount += 1\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			150 -> 155 [label=calls style=dashed]
+			subgraph cluster_150 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				155 [label=print color="#E552FF" shape=tab style=filled]
+				156 [label="- [x] {0}.format" color="#E552FF" shape=tab style=filled]
+				155 -> 156 [color=black]
+			}
+			150 -> 143 [label="" color=black]
+			146 -> 150 [label="self.json.get(key.replace('addr:', ''))" color=green]
+			152 [label="print('- [ ] {0}'.format(key))\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			152 -> 153 [label=calls style=dashed]
+			subgraph cluster_152 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				153 [label=print color="#E552FF" shape=tab style=filled]
+				154 [label="- [ ] {0}.format" color="#E552FF" shape=tab style=filled]
+				153 -> 154 [color=black]
+			}
+			152 -> 143 [label="" color=black]
+			146 -> 152 [label="(not self.json.get(key.replace('addr:', '')))" color=red]
+			144 -> 146 [label="'addr:' in key" color=green]
+			144 -> 143 [label="('addr:' not in key)" color=red]
+			143 -> 144 [label="self.osm" color=green]
+			145 [label="print('({0}/{1})'.format(count, len(self.osm) - 2))\lprint('')\lprint('Fieldnames')\lprint('----------')\lcount = 0\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			145 -> 157 [label=calls style=dashed]
+			145 -> 160 [label=calls style=dashed]
+			145 -> 161 [label=calls style=dashed]
+			145 -> 162 [label=calls style=dashed]
+			subgraph cluster_145 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				157 [label=print color="#E552FF" shape=tab style=filled]
+				158 [label="({0}/{1}).format" color="#E552FF" shape=tab style=filled]
+				157 -> 158 [color=black]
+				159 [label=len color="#E552FF" shape=tab style=filled]
+				158 -> 159 [color=black]
+				160 [label=print color="#E552FF" shape=tab style=filled]
+				161 [label=print color="#E552FF" shape=tab style=filled]
+				162 [label=print color="#E552FF" shape=tab style=filled]
+			}
+			163 [label="for fieldname in self.fieldnames:\l" fillcolor="#FFBE52" shape=hexagon style="filled,solid"]
+			164 [label="if self.json.get(fieldname):\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			164 -> 166 [label=calls style=dashed]
+			subgraph cluster_164 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				166 [label="self.json.get" color="#E552FF" shape=tab style=filled]
+			}
+			167 [label="print('- [x] {0}'.format(fieldname))\lcount += 1\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			167 -> 172 [label=calls style=dashed]
+			subgraph cluster_167 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				172 [label=print color="#E552FF" shape=tab style=filled]
+				173 [label="- [x] {0}.format" color="#E552FF" shape=tab style=filled]
+				172 -> 173 [color=black]
+			}
+			167 -> 163 [label="" color=black]
+			164 -> 167 [label="self.json.get(fieldname)" color=green]
+			169 [label="print('- [ ] {0}'.format(fieldname))\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			169 -> 170 [label=calls style=dashed]
+			subgraph cluster_169 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				170 [label=print color="#E552FF" shape=tab style=filled]
+				171 [label="- [ ] {0}.format" color="#E552FF" shape=tab style=filled]
+				170 -> 171 [color=black]
+			}
+			169 -> 163 [label="" color=black]
+			164 -> 169 [label="(not self.json.get(fieldname))" color=red]
+			163 -> 164 [label="self.fieldnames" color=green]
+			165 [label="print('({0}/{1})'.format(count, len(self.fieldnames)))\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			165 -> 174 [label=calls style=dashed]
+			subgraph cluster_165 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				174 [label=print color="#E552FF" shape=tab style=filled]
+				175 [label="({0}/{1}).format" color="#E552FF" shape=tab style=filled]
+				174 -> 175 [color=black]
+				176 [label=len color="#E552FF" shape=tab style=filled]
+				175 -> 176 [color=black]
+			}
+			163 -> 165 [label="" color=green]
+			145 -> 163 [label="" color=black]
+			143 -> 145 [label="" color=green]
+			129 -> 143 [label="" color=black]
+		}
+		subgraph cluster2_get_bbox {
+			graph [compound=True fontname="DejaVu Sans Mono" label=_get_bbox pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			179 [label="if all([south, east, north, west]):\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			179 -> 180 [label=calls style=dashed]
+			subgraph cluster_179 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				180 [label=all color="#E552FF" shape=tab style=filled]
+			}
+			181 [label="self.south = float(south)\lself.west = float(west)\lself.north = float(north)\lself.east = float(east)\lself.northeast = [self.north, self.east]\lself.northwest = [self.north, self.west]\lself.southwest = [self.south, self.west]\lself.southeast = [self.south, self.east]\lself.westsouth = [self.west, self.south]\lself.eastnorth = [self.east, self.north]\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			181 -> 183 [label=calls style=dashed]
+			181 -> 184 [label=calls style=dashed]
+			181 -> 185 [label=calls style=dashed]
+			181 -> 186 [label=calls style=dashed]
+			subgraph cluster_181 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				183 [label=float color="#E552FF" shape=tab style=filled]
+				184 [label=float color="#E552FF" shape=tab style=filled]
+				185 [label=float color="#E552FF" shape=tab style=filled]
+				186 [label=float color="#E552FF" shape=tab style=filled]
+			}
+			187 [label="return dict(northeast=self.northeast, southwest=self.southwest)\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			181 -> 187 [label="" color=black]
+			179 -> 181 [label="all([south, east, north, west])" color=green]
+			182 [label="return {}\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			179 -> 182 [label="(not all([south, east, north, west]))" color=red]
+		}
+		subgraph cluster2confidence {
+			graph [compound=True fontname="DejaVu Sans Mono" label=confidence pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			192 [label="if self.bbox:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			193 [label="distance = Distance(self.northeast, self.southwest, units='km')\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			193 -> 195 [label=calls style=dashed]
+			subgraph cluster_193 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				195 [label=Distance color="#E552FF" shape=tab style=filled]
+			}
+			196 [label="for score, maximum in [(10, 0.25), (9, 0.5), (8, 1), (7, 5), (6, 7.5), (5, \l" fillcolor="#FFBE52" shape=hexagon style="filled,solid"]
+			197 [label="if distance < maximum:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			199 [label="return score\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			197 -> 199 [label="distance < maximum" color=green]
+			200 [label="if distance >= 25:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			202 [label="return 1\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			200 -> 202 [label="distance >= 25" color=green]
+			200 -> 196 [label="(distance < 25)" color=red]
+			197 -> 200 [label="(distance >= maximum)" color=red]
+			196 -> 197 [label="[(10, 0.25), (9, 0.5), (8, 1), (7, 5), (6, 7.5), (5, 10), (4, 15), (3, 20),
+    (2, 25)]" color=red]
+			194 [label="return 0\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			196 -> 194 [label="" color=green]
+			193 -> 196 [label="" color=black]
+			192 -> 193 [label="self.bbox" color=green]
+			192 -> 194 [label="(not self.bbox)" color=red]
+		}
+		subgraph cluster2geometry {
+			graph [compound=True fontname="DejaVu Sans Mono" label=geometry pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			208 [label="if self.ok:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			209 [label="return {'type': 'Point', 'coordinates': [self.x, self.y]}\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			208 -> 209 [label="self.ok" color=green]
+			210 [label="return {}\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			208 -> 210 [label="(not self.ok)" color=red]
+		}
+		subgraph cluster2osm {
+			graph [compound=True fontname="DejaVu Sans Mono" label=osm pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			215 [label="osm = dict()\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			215 -> 216 [label=calls style=dashed]
+			subgraph cluster_215 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				216 [label=dict color="#E552FF" shape=tab style=filled]
+			}
+			217 [label="if self.ok:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			218 [label="osm['x'] = self.x\losm['y'] = self.y\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			220 [label="if self.housenumber:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			221 [label="osm['addr:housenumber'] = self.housenumber\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			222 [label="if self.road:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			223 [label="osm['addr:street'] = self.road\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			224 [label="if self.city:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			225 [label="osm['addr:city'] = self.city\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			226 [label="if self.state:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			227 [label="osm['addr:state'] = self.state\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			228 [label="if self.country:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			229 [label="osm['addr:country'] = self.country\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			230 [label="if self.postal:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			231 [label="osm['addr:postal'] = self.postal\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			232 [label="if hasattr(self, 'population'):\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			232 -> 233 [label=calls style=dashed]
+			subgraph cluster_232 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				233 [label=hasattr color="#E552FF" shape=tab style=filled]
+			}
+			234 [label="if self.population:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			236 [label="osm['population'] = self.population\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			219 [label="return osm\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			236 -> 219 [label="" color=black]
+			234 -> 236 [label="self.population" color=green]
+			234 -> 219 [label="(not self.population)" color=red]
+			232 -> 234 [label="hasattr(self, 'population')" color=green]
+			232 -> 219 [label="(not hasattr(self, 'population'))" color=red]
+			231 -> 232 [label="" color=black]
+			230 -> 231 [label="self.postal" color=green]
+			230 -> 232 [label="(not self.postal)" color=red]
+			229 -> 230 [label="" color=black]
+			228 -> 229 [label="self.country" color=green]
+			228 -> 230 [label="(not self.country)" color=red]
+			227 -> 228 [label="" color=black]
+			226 -> 227 [label="self.state" color=green]
+			226 -> 228 [label="(not self.state)" color=red]
+			225 -> 226 [label="" color=black]
+			224 -> 225 [label="self.city" color=green]
+			224 -> 226 [label="(not self.city)" color=red]
+			223 -> 224 [label="" color=black]
+			222 -> 223 [label="self.road" color=green]
+			222 -> 224 [label="(not self.road)" color=red]
+			221 -> 222 [label="" color=black]
+			220 -> 221 [label="self.housenumber" color=green]
+			220 -> 222 [label="(not self.housenumber)" color=red]
+			218 -> 220 [label="" color=black]
+			217 -> 218 [label="self.ok" color=green]
+			217 -> 219 [label="(not self.ok)" color=red]
+			215 -> 217 [label="" color=black]
+		}
+		subgraph cluster2geojson {
+			graph [compound=True fontname="DejaVu Sans Mono" label=geojson pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			241 [label="feature = {'type': 'Feature', 'properties': self.json}\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			242 [label="if self.bbox:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			243 [label="feature['bbox'] = [self.west, self.south, self.east, self.north]\lfeature['properties']['bbox'] = feature['bbox']\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			244 [label="if self.geometry:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			245 [label="feature['geometry'] = self.geometry\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			246 [label="return feature\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			245 -> 246 [label="" color=black]
+			244 -> 245 [label="self.geometry" color=green]
+			244 -> 246 [label="(not self.geometry)" color=red]
+			243 -> 244 [label="" color=black]
+			242 -> 243 [label="self.bbox" color=green]
+			242 -> 244 [label="(not self.bbox)" color=red]
+			241 -> 242 [label="" color=black]
+		}
+		subgraph cluster2wkt {
+			graph [compound=True fontname="DejaVu Sans Mono" label=wkt pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			250 [label="if self.ok:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			251 [label="return 'POINT({x} {y})'.format(x=self.x, y=self.y)\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			250 -> 251 [label="self.ok" color=green]
+			252 [label="return ''\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			250 -> 252 [label="(not self.ok)" color=red]
+		}
+		subgraph cluster2xy {
+			graph [compound=True fontname="DejaVu Sans Mono" label=xy pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			257 [label="if self.ok:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			258 [label="return [self.lng, self.lat]\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			257 -> 258 [label="self.ok" color=green]
+			259 [label="return []\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			257 -> 259 [label="(not self.ok)" color=red]
+		}
+		subgraph cluster2latlng {
+			graph [compound=True fontname="DejaVu Sans Mono" label=latlng pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			264 [label="if self.ok:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			265 [label="return [self.lat, self.lng]\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			264 -> 265 [label="self.ok" color=green]
+			266 [label="return []\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			264 -> 266 [label="(not self.ok)" color=red]
+		}
+		subgraph cluster2y {
+			graph [compound=True fontname="DejaVu Sans Mono" label=y pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			271 [label="return self.lat\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster2x {
+			graph [compound=True fontname="DejaVu Sans Mono" label=x pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			275 [label="return self.lng\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster2locality {
+			graph [compound=True fontname="DejaVu Sans Mono" label=locality pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			279 [label="return self.city\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster2province {
+			graph [compound=True fontname="DejaVu Sans Mono" label=province pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			283 [label="return self.state\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster2street_number {
+			graph [compound=True fontname="DejaVu Sans Mono" label=street_number pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			287 [label="return self.housenumber\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster2road {
+			graph [compound=True fontname="DejaVu Sans Mono" label=road pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			291 [label="return self.street\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster2route {
+			graph [compound=True fontname="DejaVu Sans Mono" label=route pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			295 [label="return self.street\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+	}
+	subgraph cluster0MultipleResultsQuery {
+		graph [compound=True fontname="DejaVu Sans Mono" label=MultipleResultsQuery pack=False rankdir=TB ranksep=0.02]
+		node [fontname="DejaVu Sans Mono"]
+		edge [fontname="DejaVu Sans Mono"]
+		300 [label="\"\"\" Will replace the Base class to support multiple results, with the following differences :\l\l        - split class into 2 parts :\l            - OneResult to actually store a (JSON) object from provider\l            - MultipleResultsQuery to manage the query\l\l        - class variables moved into instance\l        - remaining class variables are names with convention: _CAPITALS\l        - self.url derived from class var cls.URL, which must be a valid URL\l        - self.timeout has default value from class var cls.TIMEOUT\l    \"\"\"\l_URL = None\l_RESULT_CLASS = None\l_KEY = None\l_KEY_MANDATORY = True\l_TIMEOUT = 5.0\l@staticmethod...\l@classmethod...\l@classmethod...\ldef __init__(self, location, **kwargs):...\ldef __getitem__(self, key):...\ldef __setitem__(self, key, value):...\ldef __delitem__(self, key):...\ldef __len__(self):...\ldef insert(self, index, value):...\ldef add(self, value):...\ldef __repr__(self):...\ldef _build_headers(self, provider_key, **kwargs):...\ldef _build_params(self, location, provider_key, **kwargs):...\ldef _before_initialize(self, location, **kwargs):...\ldef _initialize(self):...\ldef _connect(self):...\ldef rate_limited_get(self, url, **kwargs):...\ldef _adapt_results(self, json_response):...\ldef _parse_results(self, json_response):...\ldef _catch_errors(self, json_response):...\l@property...\l@property...\l@property...\ldef debug(self):...\ldef set_default_result(self, index):...\ldef __getattr__(self, name):...\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+		subgraph cluster0_is_valid_url {
+			graph [compound=True fontname="DejaVu Sans Mono" label=_is_valid_url pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			302 [label="\"\"\" Helper function to validate that URLs are well formed, i.e that it contains a valid\l            protocol and a valid domain. It does not actually check if the URL exists\l        \"\"\"\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			303 [label="parsed = urlparse(url)\lmandatory_parts = [parsed.scheme, parsed.netloc]\l" fillcolor=orange shape=Mdiamond style="filled,solid"]
+			305 [label="return False\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			303 -> 307 [label=calls style=dashed]
+			subgraph cluster_303 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				307 [label=urlparse color="#E552FF" shape=tab style=filled]
+			}
+			308 [label="return all(mandatory_parts)\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			303 -> 308 [label="" color=black]
+			302 -> 303 [label="" color=black]
+		}
+		subgraph cluster0_is_valid_result_class {
+			graph [compound=True fontname="DejaVu Sans Mono" label=_is_valid_result_class pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			312 [label="return issubclass(cls._RESULT_CLASS, OneResult)\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster2_get_api_key {
+			graph [compound=True fontname="DejaVu Sans Mono" label=_get_api_key pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			316 [label="key = key or cls._KEY\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			317 [label="if not key and cls._KEY_MANDATORY:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			318 [label="raise ValueError('Provide API Key')\l" fillcolor="#98fb98" shape=house style="filled,solid"]
+			317 -> 318 [label="not key and cls._KEY_MANDATORY" color=green]
+			319 [label="return key\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			317 -> 319 [label="(not (not key and cls._KEY_MANDATORY))" color=red]
+			316 -> 317 [label="" color=black]
+		}
+		subgraph cluster1__init__ {
+			graph [compound=True fontname="DejaVu Sans Mono" label=__init__ pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			324 [label="super(MultipleResultsQuery, self).__init__()\lself._list = []\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			324 -> 325 [label=calls style=dashed]
+			subgraph cluster_324 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				325 [label="super.__init__" color="#E552FF" shape=tab style=filled]
+			}
+			326 [label="if not self._is_valid_url(self._URL):\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			327 [label="raise ValueError('Subclass must define...', self._URL)\l" fillcolor="#98fb98" shape=house style="filled,solid"]
+			326 -> 327 [label="not self._is_valid_url(self._URL)" color=green]
+			328 [label="self.url = self._URL\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			330 [label="if not self._is_valid_result_class():\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			331 [label="raise ValueError(\"Subclass must define...'OneResult'. Got %s\",\l    self._RESULT_CLASS)\l" fillcolor="#98fb98" shape=house style="filled,solid"]
+			330 -> 331 [label="not self._is_valid_result_class()" color=green]
+			332 [label="self.one_result = self._RESULT_CLASS\lprovider_key = self._get_api_key(kwargs.pop('key', ''))\lself.location = location\lself.encoding = kwargs.get('encoding', 'utf-8')\lself.timeout = kwargs.get('timeout', self._TIMEOUT)\lself.proxies = kwargs.get('proxies', '')\lself.session = kwargs.get('session', requests.Session())\lself.headers = kwargs.get('headers', self._build_headers(provider_key, **\l    kwargs))\lself.params = OrderedDict(kwargs.get('params', self._build_params(location,\l    provider_key, **kwargs)))\lself.status_code = None\lself.response = None\lself.error = False\lself.current_result = None\lself._before_initialize(location, **kwargs)\lself._initialize()\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			332 -> 334 [label=calls style=dashed]
+			332 -> 336 [label=calls style=dashed]
+			332 -> 337 [label=calls style=dashed]
+			332 -> 338 [label=calls style=dashed]
+			332 -> 339 [label=calls style=dashed]
+			332 -> 341 [label=calls style=dashed]
+			332 -> 343 [label=calls style=dashed]
+			332 -> 346 [label=calls style=dashed]
+			332 -> 347 [label=calls style=dashed]
+			subgraph cluster_332 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				334 [label="self._get_api_key" color="#E552FF" shape=tab style=filled]
+				335 [label="kwargs.pop" color="#E552FF" shape=tab style=filled]
+				334 -> 335 [color=black]
+				336 [label="kwargs.get" color="#E552FF" shape=tab style=filled]
+				337 [label="kwargs.get" color="#E552FF" shape=tab style=filled]
+				338 [label="kwargs.get" color="#E552FF" shape=tab style=filled]
+				339 [label="kwargs.get" color="#E552FF" shape=tab style=filled]
+				340 [label="requests.Session" color="#E552FF" shape=tab style=filled]
+				339 -> 340 [color=black]
+				341 [label="kwargs.get" color="#E552FF" shape=tab style=filled]
+				342 [label="self._build_headers" color="#E552FF" shape=tab style=filled]
+				341 -> 342 [color=black]
+				343 [label=OrderedDict color="#E552FF" shape=tab style=filled]
+				344 [label="kwargs.get" color="#E552FF" shape=tab style=filled]
+				343 -> 344 [color=black]
+				345 [label="self._build_params" color="#E552FF" shape=tab style=filled]
+				344 -> 345 [color=black]
+				346 [label="self._before_initialize" color="#E552FF" shape=tab style=filled]
+				347 [label="self._initialize" color="#E552FF" shape=tab style=filled]
+			}
+			330 -> 332 [label="(not not self._is_valid_result_class())" color=red]
+			328 -> 330 [label="" color=black]
+			326 -> 328 [label="(not not self._is_valid_url(self._URL))" color=red]
+			324 -> 326 [label="" color=black]
+		}
+		subgraph cluster0__getitem__ {
+			graph [compound=True fontname="DejaVu Sans Mono" label=__getitem__ pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			350 [label="return self._list[key]\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster0__setitem__ {
+			graph [compound=True fontname="DejaVu Sans Mono" label=__setitem__ pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			354 [label="self._list[key] = value\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+		}
+		subgraph cluster0__delitem__ {
+			graph [compound=True fontname="DejaVu Sans Mono" label=__delitem__ pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			357 [label="" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+		}
+		subgraph cluster0__len__ {
+			graph [compound=True fontname="DejaVu Sans Mono" label=__len__ pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			360 [label="return len(self._list)\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster0insert {
+			graph [compound=True fontname="DejaVu Sans Mono" label=insert pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			364 [label="self._list.insert(index, value)\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			364 -> 365 [label=calls style=dashed]
+			subgraph cluster_364 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				365 [label="self._list.insert" color="#E552FF" shape=tab style=filled]
+			}
+		}
+		subgraph cluster0add {
+			graph [compound=True fontname="DejaVu Sans Mono" label=add pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			368 [label="self._list.append(value)\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			368 -> 369 [label=calls style=dashed]
+			subgraph cluster_368 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				369 [label="self._list.append" color="#E552FF" shape=tab style=filled]
+			}
+		}
+		subgraph cluster3__repr__ {
+			graph [compound=True fontname="DejaVu Sans Mono" label=__repr__ pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			372 [label="base_repr = u'<[{0}] {1} - {2} {{0...'.format(self.status, self.provider.\l    title(), self.method.title())\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			372 -> 373 [label=calls style=dashed]
+			subgraph cluster_372 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				373 [label="<[{0}] {1} - {2} {{0}}>.format" color="#E552FF" shape=tab style=filled]
+				374 [label="self.provider.title" color="#E552FF" shape=tab style=filled]
+				373 -> 374 [color=black]
+				375 [label="self.method.title" color="#E552FF" shape=tab style=filled]
+				373 -> 375 [color=black]
+			}
+			376 [label="if len(self) == 0:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			376 -> 377 [label=calls style=dashed]
+			subgraph cluster_376 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				377 [label=len color="#E552FF" shape=tab style=filled]
+			}
+			378 [label="return base_repr.format(u'[empty]')\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			376 -> 378 [label="len(self) == 0" color=green]
+			380 [label="if len(self) == 1:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			380 -> 381 [label=calls style=dashed]
+			subgraph cluster_380 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				381 [label=len color="#E552FF" shape=tab style=filled]
+			}
+			382 [label="return base_repr.format(repr(self[0]))\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			380 -> 382 [label="len(self) == 1" color=green]
+			384 [label="return base_repr.format(u'#%s results' % len(self))\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			380 -> 384 [label="(len(self) != 1)" color=red]
+			376 -> 380 [label="(len(self) != 0)" color=red]
+			372 -> 376 [label="" color=black]
+		}
+		subgraph cluster0_build_headers {
+			graph [compound=True fontname="DejaVu Sans Mono" label=_build_headers pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			390 [label="\"\"\"Will be overridden a...\"\"\"\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			391 [label="return {}\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			390 -> 391 [label="" color=black]
+		}
+		subgraph cluster0_build_params {
+			graph [compound=True fontname="DejaVu Sans Mono" label=_build_params pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			395 [label="\"\"\"Will be overridden a...\"\"\"\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			396 [label="return {}\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			395 -> 396 [label="" color=black]
+		}
+		subgraph cluster0_before_initialize {
+			graph [compound=True fontname="DejaVu Sans Mono" label=_before_initialize pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			400 [label="\"\"\"Can be overridden to...\"\"\"\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+		}
+		subgraph cluster2_initialize {
+			graph [compound=True fontname="DejaVu Sans Mono" label=_initialize pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			403 [label="json_response = self._connect()\lhas_error = self._catch_errors(json_response) if json_response else True\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			403 -> 404 [label=calls style=dashed]
+			403 -> 405 [label=calls style=dashed]
+			subgraph cluster_403 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				404 [label="self._connect" color="#E552FF" shape=tab style=filled]
+				405 [label="self._catch_errors" color="#E552FF" shape=tab style=filled]
+			}
+			406 [label="if not has_error:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			407 [label="self._parse_results(json_response)\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			407 -> 409 [label=calls style=dashed]
+			subgraph cluster_407 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				409 [label="self._parse_results" color="#E552FF" shape=tab style=filled]
+			}
+			406 -> 407 [label="not has_error" color=green]
+			403 -> 406 [label="" color=black]
+		}
+		subgraph cluster2_connect {
+			graph [compound=True fontname="DejaVu Sans Mono" label=_connect pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			412 [label="\"\"\" - Query self.url (validated cls._URL)\l            - Analyse reponse and set status, errors accordingly\l            - On success:\l\l                 returns the content of the response as a JSON object\l                 This object will be passed to self._parse_json_response\l        \"\"\"\lself.status_code = 'Unknown'\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			413 [label="self.response = response = self.rate_limited_get(self.url, params=self.\l    params, headers=self.headers, timeout=self.timeout, proxies=self.proxies)\lself.status_code = response.status_code\lresponse.raise_for_status()\ljson_response = response.json()\lself.url = response.url\lLOGGER.info('Requested %s', self.url)\l" fillcolor=orange shape=Mdiamond style="filled,solid"]
+			415 [label="self.error = u'ERROR - {}'.format(str(err))\lLOGGER.error('Status code %s from ...', self.status_code, self.url, self\l    .error)\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			415 -> 416 [label=calls style=dashed]
+			415 -> 418 [label=calls style=dashed]
+			subgraph cluster_415 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				416 [label="ERROR - {}.format" color="#E552FF" shape=tab style=filled]
+				417 [label=str color="#E552FF" shape=tab style=filled]
+				416 -> 417 [color=black]
+				418 [label="LOGGER.error" color="#E552FF" shape=tab style=filled]
+			}
+			419 [label="return False\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			415 -> 419 [label="" color=black]
+			413 -> 421 [label=calls style=dashed]
+			413 -> 422 [label=calls style=dashed]
+			413 -> 423 [label=calls style=dashed]
+			413 -> 424 [label=calls style=dashed]
+			subgraph cluster_413 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				421 [label="self.rate_limited_get" color="#E552FF" shape=tab style=filled]
+				422 [label="response.raise_for_status" color="#E552FF" shape=tab style=filled]
+				423 [label="response.json" color="#E552FF" shape=tab style=filled]
+				424 [label="LOGGER.info" color="#E552FF" shape=tab style=filled]
+			}
+			414 [label="return json_response\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			413 -> 414 [label="" color=black]
+			412 -> 413 [label="" color=black]
+		}
+		subgraph cluster2rate_limited_get {
+			graph [compound=True fontname="DejaVu Sans Mono" label=rate_limited_get pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			428 [label="\"\"\" By default, simply ...\"\"\"\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			429 [label="return self.session.get(url, **kwargs)\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			428 -> 429 [label="" color=black]
+		}
+		subgraph cluster0_adapt_results {
+			graph [compound=True fontname="DejaVu Sans Mono" label=_adapt_results pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			433 [label="\"\"\" Allow children classes to format json_response into an array of objects\l            OVERRIDE TO FETCH the correct array of objects when necessary\l        \"\"\"\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			434 [label="return json_response\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			433 -> 434 [label="" color=black]
+		}
+		subgraph cluster0_parse_results {
+			graph [compound=True fontname="DejaVu Sans Mono" label=_parse_results pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			438 [label="\"\"\" Creates instances of self.one_result (validated cls._RESULT_CLASS)\l            from JSON results retrieved by self._connect\l\l            params: array of objects (dictionnaries)\l        \"\"\"\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			439 [label="for json_dict in self._adapt_results(json_response):\l" fillcolor="#FFBE52" shape=hexagon style="filled,solid"]
+			439 -> 440 [label=calls style=dashed]
+			subgraph cluster_439 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				440 [label="self._adapt_results" color="#E552FF" shape=tab style=filled]
+			}
+			441 [label="self.add(self.one_result(json_dict))\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			441 -> 443 [label=calls style=dashed]
+			subgraph cluster_441 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				443 [label="self.add" color="#E552FF" shape=tab style=filled]
+				444 [label="self.one_result" color="#E552FF" shape=tab style=filled]
+				443 -> 444 [color=black]
+			}
+			441 -> 439 [label="" color=black]
+			439 -> 441 [label="self._adapt_results(json_response)" color=green]
+			442 [label="self.current_result = len(self) > 0 and self[0]\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			442 -> 445 [label=calls style=dashed]
+			subgraph cluster_442 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				445 [label=len color="#E552FF" shape=tab style=filled]
+			}
+			439 -> 442 [label="" color=green]
+			438 -> 439 [label="" color=black]
+		}
+		subgraph cluster2_catch_errors {
+			graph [compound=True fontname="DejaVu Sans Mono" label=_catch_errors pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			448 [label="\"\"\" Checks the JSON ret...\"\"\"\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			449 [label="return self.error\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			448 -> 449 [label="" color=black]
+		}
+		subgraph cluster3ok {
+			graph [compound=True fontname="DejaVu Sans Mono" label=ok pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			453 [label="return len(self) > 0\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+		}
+		subgraph cluster3status {
+			graph [compound=True fontname="DejaVu Sans Mono" label=status pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			457 [label="if self.ok:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			458 [label="return 'OK'\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			457 -> 458 [label="self.ok" color=green]
+			460 [label="if self.error:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			461 [label="return self.error\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			460 -> 461 [label="self.error" color=green]
+			463 [label="if len(self) == 0:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			463 -> 464 [label=calls style=dashed]
+			subgraph cluster_463 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				464 [label=len color="#E552FF" shape=tab style=filled]
+			}
+			465 [label="return 'ERROR - No results f...'\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			463 -> 465 [label="len(self) == 0" color=green]
+			467 [label="return 'ERROR - Unhandled Ex...'\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			463 -> 467 [label="(len(self) != 0)" color=red]
+			460 -> 463 [label="(not self.error)" color=red]
+			457 -> 460 [label="(not self.ok)" color=red]
+		}
+		subgraph cluster3geojson {
+			graph [compound=True fontname="DejaVu Sans Mono" label=geojson pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			474 [label="geojson_results = [result.geojson for result in self]\lfeatures = {'type': 'FeatureCollection', 'features': geojson_results}\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			475 [label="return features\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			474 -> 475 [label="" color=black]
+		}
+		subgraph cluster3debug {
+			graph [compound=True fontname="DejaVu Sans Mono" label=debug pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			479 [label="print('===')\lprint(repr(self))\lprint('===')\lprint('')\lprint('#res: {}'.format(len(self)))\lprint('code: {}'.format(self.status_code))\lprint('url:  {}'.format(self.url))\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			479 -> 480 [label=calls style=dashed]
+			479 -> 481 [label=calls style=dashed]
+			479 -> 483 [label=calls style=dashed]
+			479 -> 484 [label=calls style=dashed]
+			479 -> 485 [label=calls style=dashed]
+			479 -> 488 [label=calls style=dashed]
+			479 -> 490 [label=calls style=dashed]
+			subgraph cluster_479 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				480 [label=print color="#E552FF" shape=tab style=filled]
+				481 [label=print color="#E552FF" shape=tab style=filled]
+				482 [label=repr color="#E552FF" shape=tab style=filled]
+				481 -> 482 [color=black]
+				483 [label=print color="#E552FF" shape=tab style=filled]
+				484 [label=print color="#E552FF" shape=tab style=filled]
+				485 [label=print color="#E552FF" shape=tab style=filled]
+				486 [label="#res: {}.format" color="#E552FF" shape=tab style=filled]
+				485 -> 486 [color=black]
+				487 [label=len color="#E552FF" shape=tab style=filled]
+				486 -> 487 [color=black]
+				488 [label=print color="#E552FF" shape=tab style=filled]
+				489 [label="code: {}.format" color="#E552FF" shape=tab style=filled]
+				488 -> 489 [color=black]
+				490 [label=print color="#E552FF" shape=tab style=filled]
+				491 [label="url:  {}.format" color="#E552FF" shape=tab style=filled]
+				490 -> 491 [color=black]
+			}
+			492 [label="if self.ok:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			493 [label="for index, result in enumerate(self):\l" fillcolor="#FFBE52" shape=hexagon style="filled,solid"]
+			493 -> 497 [label=calls style=dashed]
+			subgraph cluster_493 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				497 [label=enumerate color="#E552FF" shape=tab style=filled]
+			}
+			498 [label="print('')\lprint('Details for result #...'.format(index + 1))\lprint('---')\lresult.debug()\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			498 -> 500 [label=calls style=dashed]
+			498 -> 501 [label=calls style=dashed]
+			498 -> 503 [label=calls style=dashed]
+			498 -> 504 [label=calls style=dashed]
+			subgraph cluster_498 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				500 [label=print color="#E552FF" shape=tab style=filled]
+				501 [label=print color="#E552FF" shape=tab style=filled]
+				502 [label="Details for result #{}.format" color="#E552FF" shape=tab style=filled]
+				501 -> 502 [color=black]
+				503 [label=print color="#E552FF" shape=tab style=filled]
+				504 [label="result.debug" color="#E552FF" shape=tab style=filled]
+			}
+			498 -> 493 [label="" color=black]
+			493 -> 498 [label="enumerate(self)" color=green]
+			492 -> 493 [label="self.ok" color=green]
+			495 [label="print(self.status)\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			495 -> 496 [label=calls style=dashed]
+			subgraph cluster_495 {
+				graph [color=purple compound=true fontname="DejaVu Sans Mono" label="" rankdir=TB ranksep=0.02 shape=tab style=filled]
+				node [fontname="DejaVu Sans Mono"]
+				edge [fontname="DejaVu Sans Mono"]
+				496 [label=print color="#E552FF" shape=tab style=filled]
+			}
+			492 -> 495 [label="(not self.ok)" color=red]
+			479 -> 492 [label="" color=black]
+		}
+		subgraph cluster0set_default_result {
+			graph [compound=True fontname="DejaVu Sans Mono" label=set_default_result pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			507 [label="\"\"\" change the result used to delegate the calls to. The provided index should be in the\l            range of results, otherwise it will raise an exception\l        \"\"\"\lself.current_result = self[index]\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+		}
+		subgraph cluster0__getattr__ {
+			graph [compound=True fontname="DejaVu Sans Mono" label=__getattr__ pack=False rankdir=TB ranksep=0.02]
+			node [fontname="DejaVu Sans Mono"]
+			edge [fontname="DejaVu Sans Mono"]
+			510 [label="\"\"\" Called when an attribute lookup has not found the attribute in the usual places (i.e.\l            it is not an instance attribute nor is it found in the class tree for self). name is\l            the attribute name. This method should return the (computed) attribute value or raise\l            an AttributeError exception.\l\l            Note that if the attribute is found through the normal mechanism, __getattr__() is not called.\l        \"\"\"\l" fillcolor="#FFFB81" shape=rectangle style="filled,solid"]
+			511 [label="if not self.ok:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			512 [label="raise ValueError(self.status)\l" fillcolor="#98fb98" shape=house style="filled,solid"]
+			511 -> 512 [label="not self.ok" color=green]
+			513 [label="if self.current_result is None:\l" fillcolor="#FF6752" shape=diamond style="filled,solid"]
+			515 [label="raise AttributeError('%s not found on %s, ...'.\l    format(name, self.__class__.__name__))\l" fillcolor="#98fb98" shape=house style="filled,solid"]
+			513 -> 515 [label="self.current_result is None" color=green]
+			516 [label="return getattr(self.current_result, name)\l" fillcolor="#98fb98" shape=parallelogram style="filled,solid"]
+			513 -> 516 [label="(self.current_result is not None)" color=red]
+			511 -> 513 [label="(not not self.ok)" color=red]
+			510 -> 511 [label="" color=black]
+		}
+	}
+	subgraph cluster_KEY {
+		graph [fontname="DejaVu Sans Mono" label=KEY]
+		node [fontname="DejaVu Sans Mono"]
+		edge [fontname="DejaVu Sans Mono"]
+		input [fillcolor="#afeeee" shape=parallelogram style=filled]
+		default [fillcolor="#FFFB81" shape=rectangle style=filled]
+		if [fillcolor="#FF6752" shape=diamond style=filled]
+		for [fillcolor="#FFBE52" shape=hexagon style=filled]
+		while [fillcolor="#FFBE52" shape=hexagon style=filled]
+		call [fillcolor="#E552FF" shape=tab style=filled]
+		return [fillcolor="#98fb98" shape=parallelogram style=filled]
+		try [fillcolor=orange shape=Mdiamond style=filled]
+		raise [fillcolor="#98fb98" shape=house style=filled]
+		if -> input [style=invis]
+		input -> call [style=invis]
+		for -> return [style=invis]
+		return -> default [style=invis]
+		try -> raise [style=invis]
+	}
+}
